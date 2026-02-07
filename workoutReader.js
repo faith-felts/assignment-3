@@ -5,49 +5,74 @@ const csv = require('csv-parser');
 async function readCSVData(filepath) {
     return new Promise((resolve, reject) => {
         const results = [];
-        // Read the CSV file and parse it
-        fs.createReadStream(filepath)
-            .pipe(csv())
-            .on('data', (row) => {
-                results.push(row);
-            })
-            .on('end', () => {
-                resolve(results);
-            })
-            .on('error', (error) => {
-                reject(error);
-            });
+        // Create the read stream and attach an error handler so ENOENT rejects the promise.
+        const readStream = fs.createReadStream(filepath);
+        readStream.on('error', (err) => reject(err));
+
+        const parser = csv();
+        parser.on('error', (err) => reject(err));
+        parser.on('data', (row) => results.push(row));
+        parser.on('end', () => resolve(results));
+
+        // Pipe after listeners are attached to ensure upstream errors are caught.
+        readStream.pipe(parser);
     });
 }
 
 // Function that processes the workout CSV file and calculates total workouts and total minutes
 async function workoutCalculator(filepath) {
-   try {
-        // parse the CSV data
+    try {
         const workoutData = await readCSVData(filepath);
-        let totalWorkouts = workoutData.length; 
-        let totalMinutes = 0; 
-        // loop through the workout data to sum duration
-        for (let i = 0; i < workoutData.length; i++) { 
-            const workout = workoutData[i]; 
-            totalMinutes += parseFloat(workout.duration); 
+
+        // Defensive: ensure workoutData is an array
+        if (!Array.isArray(workoutData)) {
+            console.log('CSV file was not parsed into an array - check the file format');
+            return null;
         }
-        
-        // return object containing total workouts and total minutes
+
+        const totalWorkouts = workoutData.length;
+        let totalMinutes = 0;
+
+        for (let i = 0; i < workoutData.length; i++) {
+            const workout = workoutData[i];
+            if (!workout || !workout.duration) {
+                console.log(`Warning: missing duration at row ${i}, treating as 0`);
+                continue;
+            }
+
+            // Parse the duration
+            const parsed = parseFloat(workout.duration);
+
+            // if parsing fails (NaN) or results in null, log a warning and treat as 0 for summation.
+            if (parsed == null || isNaN(parsed)) {
+                // Log a warning but treat the value as 0 for summation so a single bad
+                // row doesn't fail the entire calculation.
+                console.log(`Warning: invalid duration at row ${i} ('${workout.duration}'), treating as 0`);
+                continue;
+            }
+
+            if (parsed < 0) {
+                // if there is a negative duration, I don't know what to do with it so just log that a negative number was found and don't add it to the total. This way we don't fail the entire calculation but we also don't include negative minutes in the total.
+                console.log(`Warning: negative duration at row ${i} (${parsed})`);
+            }
+
+            totalMinutes += parsed;
+        }
+
+
         return { totalWorkouts, totalMinutes };
-    } 
-    catch (error) {
-        // Handle file not found error
-        if (error.code === 'ENOENT') { 
-            console.log('❌ CSV file not found check the file path'); 
-        } // Handle any other unexpected errors
-        else { 
-            console.log('❌ Error processing CSVfile:', error.message); 
-        } 
+    } catch (error) {
+        // Handle file not found error for consistency with other readers.
+        if (error && error.code === 'ENOENT') {
+            console.log('File not found - check the file path');
+        } else if (error && error.name === 'Error') {
+            console.log('❌ Error processing CSV file:', error.message);
+        } else {
+            console.log('❌ Error processing CSV file:', error && error.message ? error.message : String(error));
+        }
         return null;
     }
 }
-
 
 // Export the function for use in other modules
 module.exports = { workoutCalculator };
