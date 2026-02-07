@@ -1,11 +1,3 @@
-/*
-Uses the csv-parser package to read CSV workout data asynchronously
-Counts the total number of workouts in the CSV file
-Calculates total workout minutes in the CSV file using a basic for loop
-Handles errors when the CSV file is missing or corrupted
-Provides clear error messages to users
-*/
-
 const fs = require('fs');
 const csv = require('csv-parser');
 
@@ -29,7 +21,7 @@ async function readCSVData(filepath) {
 }
 
 // Function that processes the workout CSV file and calculates total workouts and total minutes
-async function processWorkoutFile(filepath) {
+async function workoutCalculator(filepath) {
    try {
         // parse the CSV data
         const workoutData = await readCSVData(filepath);
@@ -40,8 +32,7 @@ async function processWorkoutFile(filepath) {
             const workout = workoutData[i]; 
             totalMinutes += parseFloat(workout.duration); 
         }
-
-        console.log({ totalWorkouts, totalMinutes });
+        
         // return object containing total workouts and total minutes
         return { totalWorkouts, totalMinutes };
     } 
@@ -57,7 +48,6 @@ async function processWorkoutFile(filepath) {
     }
 }
 
-processWorkoutFile('data/workouts.csv');
 
 // Export the function for use in other modules
-module.exports = { processWorkoutFile };
+module.exports = { workoutCalculator };
