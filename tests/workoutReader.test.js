@@ -2,14 +2,14 @@ const path = require('path');
 const fs = require('fs/promises');
 const { workoutCalculator } = require('../workoutReader');
 
-// Increase default timeout for tests that may read/parse CSV files on slower machines.
-jest.setTimeout(20000);
-
+// Predefined test file paths used by the suite. Each entry represents
+// a different scenario exercised by the tests below.
 const FILES = {
     normal: path.join(__dirname, 'test-workouts-normal.csv'),
     missingDuration: path.join(__dirname, 'test-workouts-missing-duration.csv'),
     invalidDuration: path.join(__dirname, 'test-workouts-invalid-duration.csv'),
-    headerOnly: path.join(__dirname, 'test-workouts-header-only.csv')
+    headerOnly: path.join(__dirname, 'test-workouts-header-only.csv'),
+    malformed: path.join(__dirname, 'test-workouts-malformed.csv')
 };
 
 beforeAll(async () => {
@@ -33,6 +33,9 @@ beforeAll(async () => {
 
     // Header only -> zero rows
     await fs.writeFile(FILES.headerOnly, 'date,duration\n');
+
+    // Malformed CSV (not in CSV format)
+    await fs.writeFile(FILES.malformed, 'just some random text not in CSV format');
 });
 
 afterAll(async () => {
@@ -42,11 +45,13 @@ afterAll(async () => {
 });
 
 describe('workoutCalculator - file parsing and summation', () => {
+    // One metric should be counted as 1.
     test('sums simple integer durations', async () => {
         const result = await workoutCalculator(FILES.normal);
         expect(result).toEqual({ totalWorkouts: 2, totalMinutes: 75 });
     });
 
+    // When duration is missing, the code should log a warning and treat it as 0 for summation.
     test('treats missing durations as 0 and logs a warning', async () => {
         const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
         const result = await workoutCalculator(FILES.missingDuration);
@@ -58,6 +63,8 @@ describe('workoutCalculator - file parsing and summation', () => {
         spy.mockRestore();
     });
 
+    // When duration is invalid (non-numeric), the code should log a warning and treat it as 0 for summation. 
+    // Valid parseable formats should be parsed correctly, and negative values should be logged but not included in the total.
     test('parses mixed/invalid durations correctly and logs appropriate warnings', async () => {
         const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
         const result = await workoutCalculator(FILES.invalidDuration);
@@ -76,6 +83,7 @@ describe('workoutCalculator - file parsing and summation', () => {
         spy.mockRestore();
     });
 
+    // When the CSV contains only a header and no data rows, the function should return 0 workouts and 0 minutes without error.
     test('returns zero for header-only CSV', async () => {
         const result = await workoutCalculator(FILES.headerOnly);
         expect(result).toEqual({ totalWorkouts: 0, totalMinutes: 0 });
@@ -83,12 +91,24 @@ describe('workoutCalculator - file parsing and summation', () => {
 
 });
 
+// Additional test for error handling 
 describe('workoutCalculator - error and input handling', () => {
+    // When the specified file does not exist, the function should log a file-not-found message and return null.
     test('returns null and logs file not found for missing file', async () => {
         const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
         const result = await workoutCalculator(path.join(__dirname, 'does-not-exist.csv'));
         expect(result).toBeNull();
         expect(spy.mock.calls.some(c => c.join(' ').includes('File not found - check the file path'))).toBe(true);
+        spy.mockRestore();
+    });
+
+    // When the CSV file is malformed (e.g., missing headers, inconsistent columns), the function should log an error message and return null.
+    test('returns null and logs error for malformed CSV', async () => {
+        const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+        const result = await workoutCalculator(FILES.malformed);
+        console.log(result);
+        expect(result).toBeNull();
+        expect(spy.mock.calls.some(c => c.join(' ').includes('CSV file is missing the "duration" column - check the headers'))).toBe(true);
         spy.mockRestore();
     });
 });

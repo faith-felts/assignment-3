@@ -1,5 +1,6 @@
 const fs = require('fs');
 const csv = require('csv-parser');
+const { workerData } = require('worker_threads');
 
 // Function to read CSV data and return it as an array of objects
 async function readCSVData(filepath) {
@@ -24,10 +25,37 @@ async function workoutCalculator(filepath) {
     try {
         const workoutData = await readCSVData(filepath);
 
-        // Defensive: ensure workoutData is an array
+        // Ensure workoutData is an array
         if (!Array.isArray(workoutData)) {
             console.log('CSV file was not parsed into an array - check the file format');
             return null;
+        }
+
+        // Malformed CSV detection:
+        // If parser returned rows, check the keys of the first row for the duration column.
+        // If parser returned zero rows, inspect the first line of the file for headers.
+        if (workoutData.length > 0) {
+            const firstRowKeys = Object.keys(workoutData[0]);
+            if (!firstRowKeys.includes('duration')) {
+                console.log('CSV file is missing the "duration" column - check the headers');
+                return null;
+            }
+        } else {
+            // No rows parsed — check the first line of the file for headers to detect malformed files.
+            try {
+                const raw = await fs.promises.readFile(filepath, 'utf8');
+                // split on newlines and trim to get the first line, which should be the header if it's a well-formed CSV
+                const firstLine = (raw.split(/\r?\n/)[0] || '').trim();
+                // If the header doesn't include the duration token, treat as malformed.
+                if (!firstLine.toLowerCase().includes('duration')) {
+                    console.log('CSV file is missing the "duration" column - check the headers');
+                    return null;
+                }
+                // Otherwise firstLine includes duration but there are no data rows; continue.
+            } catch (err) {
+                // If reading the file for header inspection fails, rethrow to be handled by catch below.
+                throw err;
+            }
         }
 
         const totalWorkouts = workoutData.length;

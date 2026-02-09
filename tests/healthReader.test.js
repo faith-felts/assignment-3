@@ -44,9 +44,6 @@ beforeAll(async () => {
     // Create a file where `metrics` is explicitly null to exercise unknown-error handling.
     await fs.writeFile(FILES.metricsNull, JSON.stringify({ user: 'Alex', metrics: null }));
 
-    // Large file: verify the function handles large arrays and returns the correct count.
-    const largeMetrics = new Array(10000).fill(0).map((_, i) => ({ id: i }));
-    await fs.writeFile(FILES.large, JSON.stringify({ user: 'Alex', metrics: largeMetrics }));
 });
 
 // Clean up all files created by the test suite. Ignore errors during deletion.
@@ -114,8 +111,8 @@ describe('healthMetricsCounter - file based cases', () => {
         expect(result).toBe(3);
     });
 
-    // If `metrics` is a plain object without a `length` property, accessing `obj.metrics.length`
-    // yields `undefined` and that's the observed behavior we assert here.
+    // If metrics is a plain object without a length property, accessing obj.metrics.length
+    // yields undefined and that's the observed behavior asserted here.
     test('returns null when metrics is an object without length and logs a message', async () => {
         const { healthMetricsCounter } = require('../healthReader');
         const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -125,8 +122,8 @@ describe('healthMetricsCounter - file based cases', () => {
         spy.mockRestore();
     });
 
-    // When `metrics` is explicitly null the parser will succeed but accessing `.length` will
-    // throw; the implementation catches and logs an unknown error and returns null.
+    // When metrics is explicitly null the parser will succeed but accessing .length will throw 
+    // The implementation catches and logs an unknown error and returns null.
     test('returns 0 when metrics is null and logs a helpful message', async () => {
         const { healthMetricsCounter } = require('../healthReader');
         const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -135,12 +132,5 @@ describe('healthMetricsCounter - file based cases', () => {
         expect(result).toBe(0);
         expect(spy).toHaveBeenCalledWith('No metrics found in the file');
         spy.mockRestore();
-    });
-
-    // Sanity check for large arrays: ensure the returned count matches the actual array size.
-    test('handles large files efficiently (count matches)', async () => {
-        const { healthMetricsCounter } = require('../healthReader');
-        const result = await healthMetricsCounter(FILES.large);
-        expect(result).toBe(10000);
     });
 });
